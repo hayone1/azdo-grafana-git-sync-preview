@@ -254,7 +254,7 @@ Remove the `GRAFANA_*` and `GIT_PROXY_URL` lines from `.env` to skip the Grafana
 
 The local stack sets `GF_PROVISIONING_ALLOW_INSECURE` and `GF_PROVISIONING_ALLOWED_GIT_URLS` so Grafana accepts the proxy over plain http on a private host. Do not use those settings in production; expose the proxy over HTTPS as described in [Connect Grafana to Azure Repos](#connect-grafana-to-azure-repos).
 
-CI runs the same test on pushes to `main` when the repository has an `e2e` environment with the `AZDO_URL` and `AZDO_PROJECT` variables and the `AZDO_PAT` secret.
+CI runs the same test on pushes to this repository (not forks). It needs an `e2e` environment with the `AZDO_URL` and `AZDO_PROJECT` variables and the `AZDO_PAT` secret.
 
 To test against a real pull request without publishing, see [docs/PUBLISHING.md](docs/PUBLISHING.md#test-privately).
 

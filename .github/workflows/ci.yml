@@ -32,7 +32,7 @@ jobs:
   # so it is skipped on forks and on pull requests from forks, which cannot read its secrets.
   e2e:
     needs: build
-    if: github.event_name == 'push' && vars.AZDO_URL != ''
+    if: github.event_name == 'push' && !github.event.repository.fork
     runs-on: ubuntu-latest
     environment: e2e
     concurrency: e2e # One run at a time: every run resets the same test repository.
