@@ -12,52 +12,54 @@ The publisher is `hayone1` (<https://marketplace.visualstudio.com/manage/publish
 
 Optional: add a second owner in *Manage publisher > Members*, so publishing never depends on one account.
 
-## 2. Create the service principal
+## 2. Provision the service principal and GitHub settings
 
-You need a Microsoft Entra tenant. If you sign in to Azure DevOps with a personal Microsoft account, use the tenant your Azure DevOps organization is connected to, or the default directory that comes with an Azure account.
+[infra/](../infra) is a Terraform configuration that creates and tracks everything except the Marketplace membership:
 
-1. In the [Azure portal](https://portal.azure.com), open *Microsoft Entra ID > App registrations > New registration*. Name it `marketplace-publisher-azdo-grafana-git-sync-preview`, single tenant, no redirect URI.
-2. Note the **Application (client) ID** and the **Directory (tenant) ID**.
-3. Open *Certificates & secrets > Federated credentials > Add credential*:
-   - **Scenario**: GitHub Actions deploying Azure resources
-   - **Organization**: `hayone1`, **Repository**: `azdo-grafana-git-sync-preview`
-   - **Entity type**: Environment, **Environment name**: `marketplace`
-4. Find the service principal's Azure DevOps profile ID. Sign in as the service principal once, from a machine with the Azure CLI. A short-lived client secret is the simplest way; delete it afterwards:
+- a Microsoft Entra app registration and service principal, `marketplace-publisher-azdo-grafana-git-sync-preview`
+- a federated credential that trusts GitHub Actions in this repository's `marketplace` environment, so no secret is stored anywhere
+- the GitHub `marketplace` environment with the `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `ADO_SHARE_WITH` and `MARKETPLACE_PUBLIC` variables
+- the GitHub `e2e` environment with `AZDO_URL` and `AZDO_PROJECT`, when `e2e_azdo_url` is set in [terraform.tfvars](../infra/terraform.tfvars)
+
+The GitHub repository must exist first. Sign in with `az login` and `gh auth login`, then:
+
+```sh
+cd infra
+export GITHUB_TOKEN=$(gh auth token)
+terraform init
+terraform apply
+```
+
+State is local and git-ignored. Keep `terraform.tfstate` somewhere safe, or add a remote backend.
+
+The e2e PAT is kept out of Terraform state. Set it with:
+
+```sh
+gh secret set AZDO_PAT --env e2e --repo hayone1/azdo-grafana-git-sync-preview
+```
+
+## 3. Add the service principal to the publisher
+
+There is no API or provider for publisher membership, so this step is manual, once.
+
+1. Find the service principal's Azure DevOps profile ID. Sign in as the service principal with a short-lived secret, in a separate Azure CLI config so your own login is untouched:
 
    ```sh
-   az login --service-principal --username <client-id> --password <temporary-secret> --tenant <tenant-id> --allow-no-subscriptions
-   az rest -u https://app.vssps.visualstudio.com/_apis/profile/profiles/me --resource 499b84ac-1321-427f-aa17-267ca6975798
+   APP=$(terraform -chdir=infra output -raw client_id)
+   TENANT=$(terraform -chdir=infra output -raw tenant_id)
+   SECRET=$(az ad app credential reset --id $APP --append --display-name temp-profile --end-date $(date -u -d '+1 day' +%Y-%m-%d) --query password -o tsv)
+   sleep 30
+   AZURE_CONFIG_DIR=/tmp/az-sp az login --service-principal -u $APP -p $SECRET --tenant $TENANT --allow-no-subscriptions -o none
+   AZURE_CONFIG_DIR=/tmp/az-sp az rest -u https://app.vssps.visualstudio.com/_apis/profile/profiles/me --resource 499b84ac-1321-427f-aa17-267ca6975798 --query id -o tsv
+   rm -rf /tmp/az-sp
+   for k in $(az ad app credential list --id $APP --query "[?displayName=='temp-profile'].keyId" -o tsv); do az ad app credential delete --id $APP --key-id $k; done
    ```
 
-   The `id` in the response is the profile ID.
+2. In the [publisher management page](https://marketplace.visualstudio.com/manage/publishers/hayone1), open *Members > Add*, paste the profile ID and choose **Contributor**.
 
-5. In the [publisher management page](https://marketplace.visualstudio.com/manage/publishers/hayone1), open *Members > Add*, paste the profile ID and give it the **Contributor** role.
-6. Delete the temporary client secret from the app registration.
+## 4. GitHub repository
 
-## 3. Create the GitHub repository
-
-1. Create a **private** repository `hayone1/azdo-grafana-git-sync-preview`. Do not add a README or license, since they exist here.
-2. Push this folder:
-
-   ```sh
-   git remote add origin https://github.com/hayone1/azdo-grafana-git-sync-preview.git
-   git push -u origin main
-   ```
-
-3. If the owner or repository name differs, update the URLs in [vss-extension.json](../vss-extension.json), [task.json](../tasks/GrafanaGitSyncPreview/task.json), [overview.md](../overview.md) and the [README](../README.md), and the federated credential.
-
-## 4. Configure GitHub Actions
-
-In the repository, open *Settings > Environments > New environment* and create `marketplace`. Add required reviewers if you want a manual approval before each publish.
-
-In that environment, add these **variables**. None of them is secret:
-
-| Name | Value |
-|---|---|
-| `AZURE_CLIENT_ID` | Application (client) ID from step 2. |
-| `AZURE_TENANT_ID` | Directory (tenant) ID from step 2. |
-| `ADO_SHARE_WITH` | Space-separated Azure DevOps organization names to share the private extension with, for example `hayone1`. |
-| `MARKETPLACE_PUBLIC` | `false` for now. |
+The repository is `hayone1/azdo-grafana-git-sync-preview`. If the owner or name changes, update the URLs in [vss-extension.json](../vss-extension.json), [task.json](../tasks/GrafanaGitSyncPreview/task.json), [overview.md](../overview.md) and the [README](../README.md), and the variables in [infra/variables.tf](../infra/variables.tf), then apply again.
 
 ## 5. Release
 
