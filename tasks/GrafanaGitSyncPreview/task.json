@@ -1,0 +1,237 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Microsoft/azure-pipelines-task-lib/master/tasks.schema.json",
+  "id": "9d6bdf10-7458-4bbf-a97b-f48b91090dfc",
+  "name": "GrafanaGitSyncPreview",
+  "friendlyName": "Grafana Git Sync PR preview",
+  "description": "Grafana Git Sync 'current' and 'preview' dashboard links for pull requests and branches.",
+  "helpUrl": "https://github.com/hayone1/azdo-grafana-git-sync-preview#readme",
+  "helpMarkDown": "Posts or updates one pull request comment with Grafana Git Sync preview links. [Docs](https://github.com/hayone1/azdo-grafana-git-sync-preview#readme)",
+  "category": "Utility",
+  "visibility": ["Build"],
+  "runsOn": ["Agent"],
+  "author": "Boluwatife Morawo",
+  "version": {
+    "Major": 1,
+    "Minor": 0,
+    "Patch": 0
+  },
+  "minimumAgentVersion": "3.232.1",
+  "instanceNameFormat": "Grafana dashboard previews ($(mode))",
+  "groups": [
+    {
+      "name": "links",
+      "displayName": "Links",
+      "isExpanded": true
+    },
+    {
+      "name": "comment",
+      "displayName": "Comment",
+      "isExpanded": false
+    },
+    {
+      "name": "advanced",
+      "displayName": "Advanced",
+      "isExpanded": false
+    }
+  ],
+  "inputs": [
+    {
+      "name": "grafanaUrl",
+      "type": "string",
+      "label": "Grafana URL",
+      "required": true,
+      "helpMarkDown": "Base URL of the Grafana instance that runs Git Sync, for example `https://grafana.example.com`."
+    },
+    {
+      "name": "mode",
+      "type": "pickList",
+      "label": "Mode",
+      "defaultValue": "auto",
+      "required": true,
+      "options": {
+        "auto": "Auto: pull request when built for one, otherwise branch",
+        "pullRequest": "Pull request: changed dashboards, commented on the PR",
+        "branch": "Branch: every dashboard, in the log and build summary"
+      },
+      "helpMarkDown": "`pullRequest` lists dashboards the pull request changes and comments on it. `branch` lists every dashboard on the built branch in the log and the build summary, with no pull request needed."
+    },
+    {
+      "name": "organizations",
+      "type": "multiLine",
+      "label": "Organizations",
+      "defaultValue": "1",
+      "required": true,
+      "helpMarkDown": "One Grafana organization per line, as `orgId` or `label=orgId`. Every dashboard gets links for each organization. Example:\n```\ntest=1\nproduction=3\n```"
+    },
+    {
+      "name": "repositorySource",
+      "type": "pickList",
+      "label": "Repository definitions",
+      "defaultValue": "file",
+      "required": true,
+      "options": {
+        "file": "Read from Repository manifests in this repo",
+        "inline": "Enter path mappings inline"
+      },
+      "helpMarkDown": "How the task learns which folders Git Sync watches and the Grafana repository name for each."
+    },
+    {
+      "name": "repositoriesFile",
+      "type": "multiLine",
+      "label": "Repository manifest files",
+      "defaultValue": "",
+      "required": true,
+      "visibleRule": "repositorySource = file",
+      "helpMarkDown": "One path or glob per line, relative to the repository root. Accepts Grafana `provisioning.grafana.app` `Repository` manifests and Crossplane `RepositoryV0Alpha1` managed resources. Multi-document YAML is supported."
+    },
+    {
+      "name": "repositories",
+      "type": "multiLine",
+      "label": "Path mappings",
+      "defaultValue": "",
+      "required": true,
+      "visibleRule": "repositorySource = inline",
+      "helpMarkDown": "One mapping per line, as `folder/in/repo=grafana-repository-name`. Use `.` or an empty folder for the repository root."
+    },
+    {
+      "name": "showCurrentLinks",
+      "type": "boolean",
+      "label": "Show 'current' links",
+      "defaultValue": "true",
+      "groupName": "links",
+      "helpMarkDown": "Link to the live dashboard. Never shown for dashboards the pull request adds."
+    },
+    {
+      "name": "showPreviewLinks",
+      "type": "boolean",
+      "label": "Show 'preview' links",
+      "defaultValue": "true",
+      "groupName": "links",
+      "helpMarkDown": "Link to Git Sync's preview of the file on the source branch. Never shown for deleted dashboards."
+    },
+    {
+      "name": "fileExtensions",
+      "type": "string",
+      "label": "File extensions",
+      "defaultValue": ".json,.yaml,.yml",
+      "groupName": "links",
+      "helpMarkDown": "Comma-separated extensions treated as dashboard files."
+    },
+    {
+      "name": "commentTitle",
+      "type": "string",
+      "label": "Comment title",
+      "defaultValue": "📊 **Grafana dashboard changes in this pull request**",
+      "groupName": "comment",
+      "helpMarkDown": "Markdown heading of the comment."
+    },
+    {
+      "name": "commentKey",
+      "type": "string",
+      "label": "Comment key",
+      "defaultValue": "grafana-dashboard-preview",
+      "groupName": "comment",
+      "helpMarkDown": "Hidden marker that identifies the comment to update. Give each task instance a different key to keep separate comments."
+    },
+    {
+      "name": "threadStatus",
+      "type": "pickList",
+      "label": "Thread status",
+      "defaultValue": "closed",
+      "groupName": "comment",
+      "options": {
+        "closed": "Closed",
+        "active": "Active",
+        "fixed": "Resolved",
+        "byDesign": "By design",
+        "wontFix": "Won't fix",
+        "pending": "Pending"
+      },
+      "helpMarkDown": "Status of a new thread. `Closed` never blocks completion under a comment-resolution policy."
+    },
+    {
+      "name": "commentWhenNoChanges",
+      "type": "boolean",
+      "label": "Comment when no dashboards change",
+      "defaultValue": "false",
+      "groupName": "comment",
+      "helpMarkDown": "Post the comment even when the pull request changes no dashboard. An existing comment is always updated."
+    },
+    {
+      "name": "publishSummary",
+      "type": "boolean",
+      "label": "Publish build summary",
+      "defaultValue": "true",
+      "groupName": "comment",
+      "helpMarkDown": "Attach the dashboard table to the run's summary page, like a GitHub job summary."
+    },
+    {
+      "name": "summaryTitle",
+      "type": "string",
+      "label": "Branch summary title",
+      "defaultValue": "",
+      "groupName": "comment",
+      "helpMarkDown": "Markdown heading of the build summary in branch mode. Defaults to a title naming the branch."
+    },
+    {
+      "name": "failOnParseError",
+      "type": "boolean",
+      "label": "Fail on unparseable dashboards",
+      "defaultValue": "true",
+      "groupName": "advanced",
+      "helpMarkDown": "Fail the task when a changed dashboard file is invalid or has no uid. Otherwise the task succeeds with issues."
+    },
+    {
+      "name": "baseRevision",
+      "type": "string",
+      "label": "Base revision",
+      "defaultValue": "HEAD^1",
+      "groupName": "advanced",
+      "helpMarkDown": "Git revision to diff `HEAD` against. `HEAD^1` is the target branch in a pull request merge checkout. Use `origin/$(System.PullRequest.TargetBranchName)` when the pipeline checks out the source branch."
+    },
+    {
+      "name": "ref",
+      "type": "string",
+      "label": "Preview ref",
+      "defaultValue": "",
+      "groupName": "advanced",
+      "helpMarkDown": "Branch or tag Grafana previews. Defaults to the pull request source branch, or the built branch in branch mode."
+    },
+    {
+      "name": "workingDirectory",
+      "type": "filePath",
+      "label": "Working directory",
+      "defaultValue": "$(Build.SourcesDirectory)",
+      "groupName": "advanced",
+      "helpMarkDown": "Git checkout to inspect."
+    },
+    {
+      "name": "accessToken",
+      "type": "string",
+      "label": "Access token",
+      "defaultValue": "$(System.AccessToken)",
+      "groupName": "advanced",
+      "helpMarkDown": "Token that can contribute to pull requests. The build service identity needs **Contribute to pull requests** on the repository."
+    }
+  ],
+  "outputVariables": [
+    {
+      "name": "dashboardCount",
+      "description": "Number of changed dashboards listed in the comment."
+    },
+    {
+      "name": "parseErrorCount",
+      "description": "Number of changed dashboard files that could not be parsed."
+    }
+  ],
+  "execution": {
+    "Node20_1": {
+      "target": "dist/index.js",
+      "argumentFormat": ""
+    },
+    "Node24": {
+      "target": "dist/index.js",
+      "argumentFormat": ""
+    }
+  }
+}

@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+  id-token: write # Lets azure/login exchange the GitHub OIDC token for a Microsoft Entra token.
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: marketplace
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tasks/GrafanaGitSyncPreview/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run version:set -- "${GITHUB_REF_NAME}"
+
+      - name: Package
+        run: |
+          if [ "${{ vars.MARKETPLACE_PUBLIC }}" = "true" ]; then
+            npm run package -- --override '{"public": true}'
+          else
+            npm run package
+          fi
+
+      # Federated credential on an Entra app registration, no stored secret. See docs/PUBLISHING.md.
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Publish to the Visual Studio Marketplace
+        env:
+          SHARE_WITH: ${{ vars.ADO_SHARE_WITH }}
+        run: |
+          # 499b84ac-1321-427f-aa17-267ca6975798 is the Azure DevOps resource. tfx sends the Entra token like a PAT.
+          token=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
+          echo "::add-mask::$token"
+          args=(extension publish --vsix out/*.vsix --auth-type pat --token "$token" --no-prompt)
+          if [ -n "$SHARE_WITH" ]; then args+=(--share-with $SHARE_WITH); fi
+          npx tfx "${args[@]}"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.vsix
+          generate_release_notes: true

@@ -1,0 +1,19 @@
+{
+  "name": "azdo-grafana-git-sync-preview",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "postinstall": "cd tasks/GrafanaGitSyncPreview && npm install",
+    "build": "cd tasks/GrafanaGitSyncPreview && npm run build",
+    "test": "npm run build && node --test",
+    "version:set": "node scripts/set-version.mjs",
+    "package": "node scripts/package.mjs",
+    "test:e2e": "npm run build && node --env-file-if-exists=.env --test e2e/run.mjs",
+    "e2e:up": "node --env-file-if-exists=.env e2e/stack.mjs up",
+    "e2e:down": "node --env-file-if-exists=.env e2e/stack.mjs down"
+  },
+  "devDependencies": {
+    "tfx-cli": "^0.21.0"
+  }
+}

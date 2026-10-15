@@ -1,0 +1,38 @@
+# Local stack for the end-to-end test: Grafana with Git Sync, reading the Azure DevOps test
+# repository through git-v2-azuredevops-proxy. Start it with `npm run e2e:up`, which sets the
+# variables below from .env. Nothing here is reachable from outside this machine except Grafana
+# on localhost:3000.
+name: grafana-git-sync-e2e
+
+services:
+  git-proxy:
+    image: dominikesb/git-v2-azuredevops-proxy:2.0.0
+    environment:
+      AZURE_DEVOPS_URL: ${AZURE_DEVOPS_URL:?}
+      AZURE_PAT: ${AZDO_PAT:?}
+      UPSTREAM_AUTH: pat
+      SYNC_INTERVAL: "10"
+      # Only Grafana on this compose network can reach the proxy.
+      GIT_PROXY_AUTH: none
+      STATUS_PAGE: "off"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 5s
+      retries: 30
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    ports: ["127.0.0.1:3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      # Local only: allow plain http and a private host for the Git Sync repository.
+      GF_PROVISIONING_ALLOW_INSECURE: "true"
+      GF_PROVISIONING_ALLOWED_GIT_URLS: git-proxy
+      GF_PROVISIONING_MIN_SYNC_INTERVAL: 10s
+    depends_on:
+      git-proxy: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 5s
+      retries: 30

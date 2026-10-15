@@ -1,0 +1,35 @@
+{
+  "manifestVersion": 1,
+  "id": "grafana-git-sync-preview",
+  "name": "Grafana Git Sync PR Preview",
+  "version": "1.0.0",
+  "publisher": "hayone1",
+  "public": false,
+  "description": "Comment Grafana Git Sync 'view current' and 'preview changes' links on Azure Repos pull requests.",
+  "categories": ["Azure Pipelines"],
+  "tags": ["grafana", "git sync", "dashboards", "pull request", "preview", "observability"],
+  "targets": [{ "id": "Microsoft.VisualStudio.Services" }],
+  "icons": { "default": "images/icon.png" },
+  "content": {
+    "details": { "path": "overview.md" },
+    "license": { "path": "LICENSE" }
+  },
+  "links": {
+    "repository": { "uri": "https://github.com/hayone1/azdo-grafana-git-sync-preview" },
+    "issues": { "uri": "https://github.com/hayone1/azdo-grafana-git-sync-preview/issues" },
+    "license": { "uri": "https://github.com/hayone1/azdo-grafana-git-sync-preview/blob/main/LICENSE" }
+  },
+  "repository": { "type": "git", "uri": "https://github.com/hayone1/azdo-grafana-git-sync-preview" },
+  "files": [
+    { "path": "tasks/GrafanaGitSyncPreview" },
+    { "path": "images", "addressable": true }
+  ],
+  "contributions": [
+    {
+      "id": "grafana-git-sync-preview-task",
+      "type": "ms.vss-distributed-task.task",
+      "targets": ["ms.vss-distributed-task.tasks"],
+      "properties": { "name": "tasks/GrafanaGitSyncPreview" }
+    }
+  ]
+}

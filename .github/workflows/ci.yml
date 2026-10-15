@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tasks/GrafanaGitSyncPreview/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: out/*.vsix
+
+  # Runs against a real Azure DevOps organization and a local Grafana. Needs the `e2e` environment,
+  # so it is skipped on forks and on pull requests from forks, which cannot read its secrets.
+  e2e:
+    needs: build
+    if: github.event_name == 'push' && vars.AZDO_URL != ''
+    runs-on: ubuntu-latest
+    environment: e2e
+    concurrency: e2e # One run at a time: every run resets the same test repository.
+    env:
+      AZDO_URL: ${{ vars.AZDO_URL }}
+      AZDO_PROJECT: ${{ vars.AZDO_PROJECT }}
+      AZDO_PAT: ${{ secrets.AZDO_PAT }}
+      GRAFANA_URL: http://localhost:3000
+      GRAFANA_USER: admin
+      GRAFANA_PASSWORD: admin
+      GIT_PROXY_URL: http://git-proxy:8080/grafana-git-sync-e2e.git
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tasks/GrafanaGitSyncPreview/package-lock.json
+      - run: npm ci
+      - run: npm run e2e:up
+      - run: npm run test:e2e
+      - if: always()
+        run: npm run e2e:down
