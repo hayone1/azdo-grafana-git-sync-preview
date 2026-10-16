@@ -221,47 +221,9 @@ Give the task a `name` to read them in later steps, for example `$(preview.dashb
 | Preview shows `unable to read bytes as a resource` | The file is classic dashboard JSON. Grafana 13 Git Sync needs a dashboard resource, as in the example above. |
 | No rows for a changed file | The file is outside every Git Sync folder, has another extension, or is not a dashboard. |
 
-## Development
+## Contributing
 
-Requires Node.js 20 or later.
-
-```sh
-npm install        # also installs the task's dependencies
-npm test           # builds the task and runs unit tests
-npm run package    # builds a .vsix into out/
-npm run test:e2e   # end-to-end test, see below
-```
-
-### End-to-end test
-
-[e2e/run.mjs](e2e/run.mjs) tests the task against a real Azure DevOps organization and a local Grafana. You need Docker, Node.js 22 and an Azure DevOps project you can create repositories in. A free organization works.
-
-1. Copy [.env.example](.env.example) to `.env` and fill in `AZDO_URL`, `AZDO_PAT` and `AZDO_PROJECT`. `.env` is git-ignored.
-2. Start Grafana 13 and [git-v2-azuredevops-proxy](https://github.com/Dominik-esb/git-v2-azuredevops-proxy) from [e2e/docker-compose.yml](e2e/docker-compose.yml):
-
-   ```sh
-   npm run e2e:up      # Grafana on http://localhost:3000, admin/admin
-   npm run test:e2e
-   npm run e2e:down
-   ```
-
-The test pushes a YAML fixture to the `grafana-git-sync-e2e` repository and opens a pull request that adds, modifies and deletes dashboards. It runs the built task as an agent would, then checks:
-
-- the pull request comment, and that a second run updates it instead of adding another,
-- branch mode and its build summary,
-- that Grafana syncs the repository through the proxy, and that every link in the comment resolves: current links through `/api/dashboards/uid`, preview links through Git Sync at the pull request branch.
-
-Remove the `GRAFANA_*` and `GIT_PROXY_URL` lines from `.env` to skip the Grafana checks. Set `E2E_KEEP=1` to keep the pull request and the Grafana repository for a look.
-
-To also test an extension installed in your organization, set `E2E_PIPELINE_TASK`, for example `GrafanaGitSyncPreview@0`. The test then adds a build-validation pipeline that runs that task on the test pull request, using the hosted `ubuntu-latest` agent or the pool in `E2E_PIPELINE_POOL`, and checks that the run succeeds and posts its comment. The release workflow uses this to test each build as a private dev extension before releasing it. See [docs/PUBLISHING.md](docs/PUBLISHING.md#5-release).
-
-The local stack sets `GF_PROVISIONING_ALLOW_INSECURE` and `GF_PROVISIONING_ALLOWED_GIT_URLS` so Grafana accepts the proxy over plain http on a private host. Do not use those settings in production; expose the proxy over HTTPS as described in [Connect Grafana to Azure Repos](#connect-grafana-to-azure-repos).
-
-CI runs the same test on pushes to this repository (not forks). It needs an `e2e` environment with the `AZDO_URL` and `AZDO_PROJECT` variables and the `AZDO_PAT` secret.
-
-To test against a real pull request without publishing, see [docs/PUBLISHING.md](docs/PUBLISHING.md#test-privately).
-
-Releases are built and published from GitHub Actions. See [docs/PUBLISHING.md](docs/PUBLISHING.md).
+Bug reports, feature requests and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and the tests.
 
 ## License
 

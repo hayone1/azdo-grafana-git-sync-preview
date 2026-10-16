@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/hayone1/azdo-grafana-git-sync-preview/security/advisories/new
+    about: Report security problems privately, not in a public issue.
+  - name: Grafana Git Sync itself
+    url: https://github.com/grafana/grafana/issues
+    about: Problems with Git Sync syncing or rendering, unrelated to this task, belong with Grafana.
+  - name: git-v2-azuredevops-proxy
+    url: https://github.com/Dominik-esb/git-v2-azuredevops-proxy/issues
+    about: Problems with the proxy that lets Grafana read Azure Repos.

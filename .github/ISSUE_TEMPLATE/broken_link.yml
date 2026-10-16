@@ -1,0 +1,62 @@
+name: Broken current or preview link
+description: The comment or summary links open, but Grafana shows an error or the wrong dashboard.
+labels: [bug, links]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        First check [Troubleshooting](https://github.com/hayone1/azdo-grafana-git-sync-preview#troubleshooting).
+        A push can take a minute or two to reach the preview, through the proxy and then Git Sync.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Which link
+      options: [current, preview, both]
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: Link
+      description: The link from the comment. Replace the host if it is internal.
+      placeholder: https://grafana.example.com/dashboard/provisioning/dashboards/preview/team-a/health.yaml?ref=feature%2Fx&orgId=1
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: What Grafana shows
+      description: The error message, or a screenshot.
+    validations:
+      required: true
+  - type: textarea
+    id: repository
+    attributes:
+      label: Repository manifest
+      description: The Git Sync Repository the task reads, with secrets removed.
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: dashboard
+    attributes:
+      label: Dashboard file header
+      description: The first lines of the dashboard file (apiVersion, kind, metadata).
+      render: yaml
+  - type: dropdown
+    id: hosting
+    attributes:
+      label: How Grafana reads the repository
+      options:
+        - git-v2-azuredevops-proxy
+        - A mirror on GitHub, GitLab or Bitbucket
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Task and Grafana versions
+      placeholder: task 0.0.7, Grafana 13.2.3
+    validations:
+      required: true

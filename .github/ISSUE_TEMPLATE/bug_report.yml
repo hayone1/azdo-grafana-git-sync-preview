@@ -1,0 +1,74 @@
+name: Bug report
+description: The task fails, crashes, or posts a wrong comment or summary.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Remove tokens, internal hostnames and other secrets from everything you paste.
+        For links that open but show an error in Grafana, use the **Broken current or preview link** template instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What the task did, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The smallest change that shows the problem, for example the files a pull request adds or changes.
+      placeholder: |
+        1. Open a pull request that changes grafana/team-a/health.yaml
+        2. The build validation run ...
+    validations:
+      required: true
+  - type: textarea
+    id: pipeline
+    attributes:
+      label: Task step in your pipeline
+      description: The GrafanaGitSyncPreview step from your YAML, with its inputs.
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Task log
+      description: The log of the task step. Set the pipeline variable system.debug to true for more detail.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options: [pullRequest, branch, auto]
+    validations:
+      required: true
+  - type: input
+    id: task-version
+    attributes:
+      label: Task version
+      description: Shown at the top of the task log, for example 0.0.7.
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      options:
+        - Microsoft-hosted Linux
+        - Microsoft-hosted Windows
+        - Microsoft-hosted macOS
+        - Self-hosted Linux
+        - Self-hosted Windows
+        - Self-hosted macOS
+    validations:
+      required: true
+  - type: input
+    id: grafana-version
+    attributes:
+      label: Grafana version
+      placeholder: "13.2.3"
