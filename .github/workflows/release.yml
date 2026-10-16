@@ -55,7 +55,7 @@ jobs:
 
           # Validation sometimes takes longer than tfx waits, so poll it here.
           for i in $(seq 1 60); do
-            status=$(npx tfx extension isvalid "${id[@]}" --version "${VERSION#v}" --json "${auth[@]}" | tr -d '"')
+            status=$(npx tfx extension isvalid "${id[@]}" --version "${VERSION#v}" --json "${auth[@]}" | jq -r .status)
             echo "Validation: $status"
             case "$status" in
               success) break ;;
