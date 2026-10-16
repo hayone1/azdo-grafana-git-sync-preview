@@ -77,7 +77,9 @@ Every build is tested as an installed extension before it is released:
 3. **test-dev**: installs that dev version in the test organization, starts the local Grafana stack, and runs the end-to-end test with `E2E_PIPELINE_TASK=GrafanaGitSyncPreviewDev@<major>`. Besides the usual checks, the test makes the `grafana-git-sync-e2e-preview` pipeline a build-validation policy on the test repository, and asserts that the real pipeline run on the pull request succeeds and posts its comment.
 4. **publish**: promotes the same tested build: publishes the release extension, shares it, and creates a GitHub release with both `.vsix` files.
 
-If any step fails, the release extension is not published. Tag a new patch version after fixing; the Marketplace never accepts the same version twice, for either extension.
+If any step fails, the release extension is not published.
+
+If a version of an extension fails Marketplace validation, later uploads of that extension can be accepted by `tfx` and then silently dropped, and the workflow fails with "never appeared on the Marketplace". Check the extension on the publisher page. For the dev extension, unpublish it (`npx tfx extension unpublish --publisher hayone1 --extension-id grafana-git-sync-preview-dev`) and rerun the failed jobs. Tag a new patch version after fixing; the Marketplace never accepts the same version twice, for either extension.
 
 Every release needs a higher version than the last one. Pipelines reference the task by major version, `GrafanaGitSyncPreview@0` for 0.x, and pick up new minors and patches automatically. A new major version needs pipelines to opt in, for example `@1`.
 

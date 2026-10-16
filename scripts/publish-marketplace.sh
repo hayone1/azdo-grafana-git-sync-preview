@@ -16,9 +16,15 @@ npx tfx extension publish --vsix "$vsix" --no-wait-validation "${auth[@]}"
 
 # tfx gives up waiting after a few minutes while the Marketplace keeps validating, so poll here.
 for _ in $(seq 1 60); do
-  # Right after publishing, the new version can be missing for a moment; treat that as pending.
+  # Right after publishing, the new version can be missing for a moment. If it stays missing, the
+  # Marketplace dropped the upload, for example because an earlier version of the extension failed
+  # validation; see docs/PUBLISHING.md.
   status=$(npx tfx extension isvalid "${id[@]}" --version "$version" --json "${auth[@]}" 2>/dev/null | jq -r .status 2>/dev/null || true)
-  [ -n "$status" ] || status=pending
+  if [ -z "$status" ]; then
+    missing=$(( ${missing:-0} + 1 ))
+    [ "$missing" -lt 10 ] || { echo "Version $version never appeared on the Marketplace"; exit 1; }
+    status=pending
+  fi
   echo "Validation of $extension $version: $status"
   case "$status" in
     success) break ;;
