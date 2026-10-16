@@ -16,7 +16,9 @@ npx tfx extension publish --vsix "$vsix" --no-wait-validation "${auth[@]}"
 
 # tfx gives up waiting after a few minutes while the Marketplace keeps validating, so poll here.
 for _ in $(seq 1 60); do
-  status=$(npx tfx extension isvalid "${id[@]}" --version "$version" --json "${auth[@]}" | jq -r .status)
+  # Right after publishing, the new version can be missing for a moment; treat that as pending.
+  status=$(npx tfx extension isvalid "${id[@]}" --version "$version" --json "${auth[@]}" 2>/dev/null | jq -r .status 2>/dev/null || true)
+  [ -n "$status" ] || status=pending
   echo "Validation of $extension $version: $status"
   case "$status" in
     success) break ;;
