@@ -38,7 +38,8 @@ for (const variant of variants) {
 
   const manifestPath = join(stage, "vss-extension.json");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-  manifest.id += "-dev";
+  // "-dev" was deleted after a failed validation, and the Marketplace never frees a deleted id.
+  manifest.id += "-canary";
   manifest.name += " (dev)";
   manifest.public = false;
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));

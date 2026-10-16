@@ -74,7 +74,7 @@ jobs:
         run: |
           export MARKETPLACE_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
           echo "::add-mask::$MARKETPLACE_TOKEN"
-          scripts/publish-marketplace.sh out/*-dev-*.vsix "${{ needs.build.outputs.version }}" ${{ vars.ADO_SHARE_WITH }}
+          scripts/publish-marketplace.sh out/*-canary-*.vsix "${{ needs.build.outputs.version }}" ${{ vars.ADO_SHARE_WITH }}
 
   test-dev:
     needs: [build, publish-dev]
@@ -101,7 +101,7 @@ jobs:
             tasks/GrafanaGitSyncPreview/package-lock.json
       - run: npm ci
       - name: Install the dev extension in the test organization
-        run: node scripts/install-extension.mjs "$(jq -r .publisher vss-extension.json)" "$(jq -r .id vss-extension.json)-dev" "${{ needs.build.outputs.version }}" "$DEV_TASK_ID"
+        run: node scripts/install-extension.mjs "$(jq -r .publisher vss-extension.json)" "$(jq -r .id vss-extension.json)-canary" "${{ needs.build.outputs.version }}" "$DEV_TASK_ID"
       - run: npm run e2e:up
       - run: npm run test:e2e
       - if: always()
@@ -131,7 +131,7 @@ jobs:
         run: |
           export MARKETPLACE_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
           echo "::add-mask::$MARKETPLACE_TOKEN"
-          scripts/publish-marketplace.sh "$(ls out/*.vsix | grep -v -- -dev-)" "${{ needs.build.outputs.version }}" ${{ vars.ADO_SHARE_WITH }}
+          scripts/publish-marketplace.sh "$(ls out/*.vsix | grep -v -- -canary-)" "${{ needs.build.outputs.version }}" ${{ vars.ADO_SHARE_WITH }}
       - uses: softprops/action-gh-release@v2
         with:
           files: out/*.vsix
