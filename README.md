@@ -196,6 +196,7 @@ The default `baseRevision` of `HEAD^1` assumes the pipeline checks out the pull 
 | `failOnParseError` | `true` | Fail the task when a changed dashboard cannot be parsed. When `false`, the task succeeds with issues. |
 | `baseRevision` | `HEAD^1` | Git revision to diff `HEAD` against. Pull request mode only. |
 | `ref` | | Branch or tag to preview. Defaults to the pull request source branch, or the built branch. |
+| `syncedBranch` | | Branch Grafana syncs. In branch mode, dashboards missing from it get no `current` link, since Grafana has no live copy. Defaults to the `branch` in each Repository manifest, then `main`. |
 | `workingDirectory` | `$(Build.SourcesDirectory)` | Git checkout to inspect. |
 | `accessToken` | `$(System.AccessToken)` | Token used to read and write pull request threads. Not used in branch mode. |
 

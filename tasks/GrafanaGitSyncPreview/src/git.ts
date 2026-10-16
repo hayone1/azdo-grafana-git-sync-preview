@@ -24,6 +24,37 @@ export function trackedFiles(cwd: string): string[] {
   return git(cwd, ["ls-files", "-z"]).split("\0").filter(Boolean);
 }
 
+/** Whether `path` exists at `rev`. */
+export function existsAt(cwd: string, rev: string, path: string): boolean {
+  try {
+    git(cwd, ["cat-file", "-e", `${rev}:${path}`]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Resolves origin/<branch>, fetching it shallowly when the checkout lacks it. Undefined when unreachable. */
+export function remoteBranch(cwd: string, branch: string): string | undefined {
+  const ref = `refs/remotes/origin/${branch}`;
+  for (const fetch of [false, true]) {
+    if (fetch) {
+      try {
+        git(cwd, ["fetch", "--quiet", "--depth=1", "origin", `+refs/heads/${branch}:${ref}`]);
+      } catch {
+        return undefined;
+      }
+    }
+    try {
+      git(cwd, ["rev-parse", "--verify", "--quiet", ref]);
+      return ref;
+    } catch {
+      // not there yet
+    }
+  }
+  return undefined;
+}
+
 export function show(cwd: string, rev: string, path: string): string {
   return git(cwd, ["show", `${rev}:${path}`]);
 }

@@ -1,4 +1,4 @@
-// Renders images/icon.svg to the 128x128 images/icon.png the Marketplace shows, with headless Chrome or Edge.
+// Renders assets/icon.svg to the 128x128 images/icon.png the Marketplace shows, with headless Chrome or Edge.
 //   node scripts/render-icon.mjs [path-to-chrome]
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdtempSync } from "node:fs";
@@ -20,7 +20,7 @@ if (!chrome) throw new Error("No Chrome or Edge found. Pass its path as an argum
 
 const dir = mkdtempSync(join(tmpdir(), "icon-"));
 const html = join(dir, "icon.html");
-writeFileSync(html, `<!doctype html><style>html,body{margin:0;background:transparent}</style>${readFileSync("images/icon.svg", "utf8")}`);
+writeFileSync(html, `<!doctype html><style>html,body{margin:0;background:transparent}</style>${readFileSync("assets/icon.svg", "utf8")}`);
 execFileSync(chrome, [
   "--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1",
   "--default-background-color=00000000", "--window-size=128,128",

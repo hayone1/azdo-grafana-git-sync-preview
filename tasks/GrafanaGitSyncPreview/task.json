@@ -7,8 +7,12 @@
   "helpUrl": "https://github.com/hayone1/azdo-grafana-git-sync-preview#readme",
   "helpMarkDown": "Posts or updates one pull request comment with Grafana Git Sync preview links. [Docs](https://github.com/hayone1/azdo-grafana-git-sync-preview#readme)",
   "category": "Utility",
-  "visibility": ["Build"],
-  "runsOn": ["Agent"],
+  "visibility": [
+    "Build"
+  ],
+  "runsOn": [
+    "Agent"
+  ],
   "author": "Boluwatife Morawo",
   "version": {
     "Major": 1,
@@ -196,6 +200,14 @@
       "defaultValue": "",
       "groupName": "advanced",
       "helpMarkDown": "Branch or tag Grafana previews. Defaults to the pull request source branch, or the built branch in branch mode."
+    },
+    {
+      "name": "syncedBranch",
+      "type": "string",
+      "label": "Synced branch",
+      "defaultValue": "",
+      "groupName": "advanced",
+      "helpMarkDown": "Branch Grafana syncs, used in branch mode to leave out 'current' links for dashboards that only exist on the built branch. Defaults to the `branch` in each Repository manifest, then `main`."
     },
     {
       "name": "workingDirectory",

@@ -3,6 +3,8 @@ import * as yaml from "js-yaml";
 export interface Repository {
   path: string;
   name: string;
+  /** Branch Grafana syncs, from the manifest. Absent for inline mappings. */
+  branch?: string;
 }
 
 function normalizePath(path: string): string {
@@ -16,14 +18,14 @@ function fromManifest(doc: any): Repository | undefined {
   if (doc.kind === "Repository" && String(doc.apiVersion ?? "").startsWith("provisioning.grafana.app/")) {
     const spec = doc.spec ?? {};
     const settings = spec[spec.type] ?? spec.git ?? spec.github ?? {};
-    return { path: normalizePath(settings.path ?? ""), name: doc.metadata?.name };
+    return { path: normalizePath(settings.path ?? ""), name: doc.metadata?.name, branch: settings.branch || undefined };
   }
 
   if (doc.kind === "RepositoryV0Alpha1") {
     const fp = doc.spec?.forProvider ?? {};
     const spec = fp.spec ?? {};
     const settings = spec[spec.type] ?? spec.git ?? spec.github ?? {};
-    return { path: normalizePath(settings.path ?? ""), name: fp.metadata?.uid ?? doc.metadata?.name };
+    return { path: normalizePath(settings.path ?? ""), name: fp.metadata?.uid ?? doc.metadata?.name, branch: settings.branch || undefined };
   }
 
   return undefined;

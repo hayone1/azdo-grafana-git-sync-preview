@@ -13,6 +13,8 @@ export interface Row {
   relPath: string;
   /** Absent in branch mode, where every dashboard is listed regardless of changes. */
   change?: Change;
+  /** False when the file is not on the branch Grafana syncs, so there is no live dashboard to link. */
+  live?: boolean;
 }
 
 export interface LinkOptions {
@@ -71,7 +73,7 @@ export interface OrgLinks {
 
 export function linkUrls(row: Row, o: LinkOptions): OrgLinks[] {
   const base = o.grafanaUrl.replace(/\/+$/, "");
-  const current = o.showCurrent && row.change !== "added";
+  const current = o.showCurrent && row.change !== "added" && row.live !== false;
   const preview = o.showPreview && row.change !== "deleted";
 
   return o.organizations.map((org) => {

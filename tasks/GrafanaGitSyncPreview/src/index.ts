@@ -3,7 +3,7 @@ import * as path from "path";
 import * as tl from "azure-pipelines-task-lib/task";
 import { buildComment, Change, LinkOptions, linkUrls, marker, parseOrganizations, Row, row } from "./comment";
 import { parseDashboard } from "./dashboard";
-import { changedFiles, show, trackedFiles } from "./git";
+import { changedFiles, existsAt, remoteBranch, show, trackedFiles } from "./git";
 import { findRepository, parseManifests, parseMappings, Repository } from "./repositories";
 import { createThread, findThread, PullRequestContext, updateComment } from "./azureDevOps";
 
@@ -61,13 +61,34 @@ function scanChanges(cwd: string, repos: Repository[], isDashboardFile: (f: stri
   return scan;
 }
 
-function scanAll(cwd: string, repos: Repository[], isDashboardFile: (f: string) => boolean): Scan {
+function scanAll(cwd: string, repos: Repository[], isDashboardFile: (f: string) => boolean, builtBranch: string): Scan {
   const scan: Scan = { rows: [], errors: [] };
   for (const file of trackedFiles(cwd)) {
     if (isDashboardFile(file)) addRow(scan, repos, file, () => fs.readFileSync(path.join(cwd, file), "utf8"));
   }
+  markLive(cwd, scan.rows, repos, builtBranch);
   scan.rows.sort((a, b) => a.path.localeCompare(b.path));
   return scan;
+}
+
+/**
+ * Branch mode lists every dashboard, including ones only this branch has. Grafana serves a live
+ * dashboard only for files on the branch it syncs, so drop "current" links for the rest.
+ */
+function markLive(cwd: string, rows: Row[], repos: Repository[], builtBranch: string) {
+  const fallback = tl.getInput("syncedBranch") || "main";
+  const refs = new Map<string, string | undefined>();
+  for (const r of rows) {
+    const branch = repos.find((repo) => repo.name === r.repository)?.branch || fallback;
+    if (branch === builtBranch) continue;
+    if (!refs.has(branch)) {
+      const ref = remoteBranch(cwd, branch);
+      if (!ref) tl.warning(`Cannot read branch '${branch}', so 'current' links are shown for every dashboard.`);
+      refs.set(branch, ref);
+    }
+    const ref = refs.get(branch);
+    if (ref) r.live = existsAt(cwd, ref, r.path);
+  }
 }
 
 function logLinks(rows: Row[], o: LinkOptions) {
@@ -154,7 +175,7 @@ async function run() {
 
   const { rows, errors } = mode === "pullRequest"
     ? scanChanges(cwd, repos, isDashboardFile)
-    : scanAll(cwd, repos, isDashboardFile);
+    : scanAll(cwd, repos, isDashboardFile, ref);
 
   tl.debug(`Found ${rows.length} dashboard(s) and ${errors.length} parse error(s).`);
   logLinks(rows, linkOptions);

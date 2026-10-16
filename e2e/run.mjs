@@ -205,6 +205,7 @@ test("pull request and branch mode against a real organization", { skip: missing
   git(work, "config", "core.autocrlf", "false");
   git(work, "config", "user.email", "e2e@example.com");
   git(work, "config", "user.name", "e2e");
+  git(work, "remote", "add", "origin", cloneUrl);
   write(work, "README.md", "Fixture for the Grafana Git Sync preview task end-to-end test.\n");
   write(work, "grafana-repository.yaml", manifest(env.GIT_PROXY_URL || cloneUrl));
   write(work, "grafana/existing.yaml", dashboard("e2e-existing", "E2E existing"));
@@ -358,6 +359,21 @@ test("pull request and branch mode against a real organization", { skip: missing
     assert.match(body, /existing\.yaml[^\n]*\| modified \|/);
     assert.match(body, /removed\.yaml[^\n]*\| deleted \|/);
   }
+
+  // Branch mode on the pull request branch: a dashboard that main lacks has no live copy in Grafana.
+  git(work, "fetch", "-q", "origin", "main");
+  git(work, "checkout", "-q", branch);
+  const featureRun = runTask(work, { ...inputs, mode: "branch" }, {
+    ...variables,
+    "System.PullRequest.PullRequestId": "",
+    "System.PullRequest.SourceBranch": "",
+    "Build.SourceBranch": `refs/heads/${branch}`,
+  });
+  assert.equal(featureRun.result, "Succeeded", featureRun.stdout);
+  const summaryRow = (file) => featureRun.summary.split("\n").find((l) => l.includes(file));
+  assert.doesNotMatch(summaryRow("added.yaml"), /\[current\]/);
+  assert.match(summaryRow("added.yaml"), /\[preview\]/);
+  assert.match(summaryRow("existing.yaml"), /\[current\].*\[preview\]/);
 
   // Branch mode on main lists every dashboard and needs no pull request.
   git(work, "checkout", "-q", "main");

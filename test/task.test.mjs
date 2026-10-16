@@ -19,7 +19,7 @@ kind: ConfigMap
 `,
     "r.yaml",
   );
-  assert.deepEqual(repos, [{ path: "dashboards/team-a", name: "team-a" }]);
+  assert.deepEqual(repos, [{ path: "dashboards/team-a", name: "team-a", branch: "main" }]);
 });
 
 test("reads Crossplane RepositoryV0Alpha1 resources", () => {
@@ -32,7 +32,7 @@ spec:
 `,
     "r.yaml",
   );
-  assert.deepEqual(repos, [{ path: "grafana/shared", name: "shared" }]);
+  assert.deepEqual(repos, [{ path: "grafana/shared", name: "shared", branch: undefined }]);
 });
 
 test("deepest mapped folder wins", () => {
@@ -77,6 +77,13 @@ test("builds current and preview links per change type", () => {
   assert.match(modified, /\/dashboard\/provisioning\/repo\/preview\/a%20b\.json\?ref=feature%2Fx/);
   assert.doesNotMatch(links({ ...base, change: "added" }, linkOptions), /current/);
   assert.doesNotMatch(links({ ...base, change: "deleted" }, linkOptions), /preview/);
+});
+
+test("no current link for dashboards missing from the synced branch", () => {
+  const branchOptions = { ...linkOptions, pullRequestUrl: undefined };
+  assert.doesNotMatch(links({ ...base, live: false }, branchOptions), /current/);
+  assert.match(links({ ...base, live: false }, branchOptions), /preview/);
+  assert.match(links({ ...base, live: true }, branchOptions), /current/);
 });
 
 test("branch rows have no change column and previews omit pull_request_url", () => {
