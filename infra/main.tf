@@ -31,12 +31,21 @@ resource "azuread_service_principal" "publisher" {
   owners    = [data.azuread_client_config.current.object_id]
 }
 
+data "github_repository" "this" {
+  name = var.github_repository
+}
+
+data "github_user" "owner" {
+  username = var.github_owner
+}
+
 resource "azuread_application_federated_identity_credential" "marketplace" {
   application_id = azuread_application.publisher.id
   display_name   = "github-marketplace-env"
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = "repo:${var.github_owner}/${var.github_repository}:environment:marketplace"
-  audiences      = ["api://AzureADTokenExchange"]
+  # GitHub's OIDC subject carries immutable owner and repository IDs, so renames do not grant access.
+  subject   = "repo:${var.github_owner}@${data.github_user.owner.id}/${var.github_repository}@${data.github_repository.this.repo_id}:environment:marketplace"
+  audiences = ["api://AzureADTokenExchange"]
 }
 
 resource "github_repository_environment" "marketplace" {
