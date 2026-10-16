@@ -115,7 +115,7 @@ steps:
   - checkout: self
     fetchDepth: 2   # HEAD^1 must exist to diff against the target branch.
 
-  - task: GrafanaGitSyncPreview@1
+  - task: GrafanaGitSyncPreview@0
     inputs:
       grafanaUrl: https://grafana.example.com
       organizations: |
@@ -136,7 +136,7 @@ trigger:
     exclude: [main]
 
 steps:
-  - task: GrafanaGitSyncPreview@1
+  - task: GrafanaGitSyncPreview@0
     inputs:
       grafanaUrl: https://grafana.example.com
       repositoriesFile: grafana/repositories/*.yaml
@@ -149,7 +149,7 @@ Grafana must be able to read the branch through Git Sync for preview links to re
 If your Git Sync repositories are not defined in this repository, map folders inline:
 
 ```yaml
-  - task: GrafanaGitSyncPreview@1
+  - task: GrafanaGitSyncPreview@0
     inputs:
       grafanaUrl: https://grafana.example.com
       repositorySource: inline
@@ -167,7 +167,7 @@ The default `baseRevision` of `HEAD^1` assumes the pipeline checks out the pull 
 ```yaml
   - checkout: self
     fetchDepth: 0
-  - task: GrafanaGitSyncPreview@1
+  - task: GrafanaGitSyncPreview@0
     inputs:
       grafanaUrl: https://grafana.example.com
       repositoriesFile: grafana/repositories/*.yaml
@@ -251,6 +251,8 @@ The test pushes a YAML fixture to the `grafana-git-sync-e2e` repository and open
 - that Grafana syncs the repository through the proxy, and that every link in the comment resolves: current links through `/api/dashboards/uid`, preview links through Git Sync at the pull request branch.
 
 Remove the `GRAFANA_*` and `GIT_PROXY_URL` lines from `.env` to skip the Grafana checks. Set `E2E_KEEP=1` to keep the pull request and the Grafana repository for a look.
+
+To also test an extension installed in your organization, set `E2E_PIPELINE_TASK`, for example `GrafanaGitSyncPreview@0`. The test then adds a build-validation pipeline that runs that task on the test pull request, using the hosted `ubuntu-latest` agent or the pool in `E2E_PIPELINE_POOL`, and checks that the run succeeds and posts its comment. The release workflow uses this to test each build as a private dev extension before releasing it. See [docs/PUBLISHING.md](docs/PUBLISHING.md#5-release).
 
 The local stack sets `GF_PROVISIONING_ALLOW_INSECURE` and `GF_PROVISIONING_ALLOWED_GIT_URLS` so Grafana accepts the proxy over plain http on a private host. Do not use those settings in production; expose the proxy over HTTPS as described in [Connect Grafana to Azure Repos](#connect-grafana-to-azure-repos).
 

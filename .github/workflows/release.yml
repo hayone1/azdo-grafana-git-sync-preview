@@ -1,5 +1,9 @@
 name: Release
 
+# Pushing a version tag builds once, publishes the build as the private dev extension, runs it in a
+# real Azure Pipelines pull request build, and only then promotes the same build to the release
+# extension.
+
 on:
   push:
     tags: ["v*.*.*"]
@@ -8,10 +12,15 @@ permissions:
   contents: write
   id-token: write # Lets azure/login exchange the GitHub OIDC token for a Microsoft Entra token.
 
+env:
+  DEV_TASK_ID: 5b0b0a8e-6f0e-4c39-9d2a-3b7c1d6e2f41 # Must match scripts/package.mjs.
+
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
-    environment: marketplace
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      major: ${{ steps.version.outputs.major }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,50 +32,106 @@ jobs:
             tasks/GrafanaGitSyncPreview/package-lock.json
       - run: npm ci
       - run: npm test
-      - run: npm run version:set -- "${GITHUB_REF_NAME}"
-
-      - name: Package
+      - id: version
+        run: |
+          npm run version:set -- "${GITHUB_REF_NAME}"
+          version=${GITHUB_REF_NAME#v}
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "major=${version%%.*}" >> "$GITHUB_OUTPUT"
+      - name: Package release and dev extensions
         run: |
           if [ "${{ vars.MARKETPLACE_PUBLIC }}" = "true" ]; then
-            npm run package -- --override '{"public": true}'
+            npm run package -- --all --override '{"public": true}'
           else
-            npm run package
+            npm run package -- --all
           fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: out/*.vsix
 
-      # Federated credential on an Entra app registration, no stored secret. See docs/PUBLISHING.md.
+  publish-dev:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: marketplace
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+          path: out
       - uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
-
-      - name: Publish to the Visual Studio Marketplace
-        env:
-          SHARE_WITH: ${{ vars.ADO_SHARE_WITH }}
-          VERSION: ${{ github.ref_name }}
+      - name: Publish the dev extension
         run: |
-          # 499b84ac-1321-427f-aa17-267ca6975798 is the Azure DevOps resource. tfx sends the Entra token like a PAT.
-          token=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
-          echo "::add-mask::$token"
-          auth=(--auth-type pat --token "$token" --no-prompt)
-          id=(--publisher "$(jq -r .publisher vss-extension.json)" --extension-id "$(jq -r .id vss-extension.json)")
+          export MARKETPLACE_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
+          echo "::add-mask::$MARKETPLACE_TOKEN"
+          scripts/publish-marketplace.sh out/*-dev-*.vsix "${{ needs.build.outputs.version }}" ${{ vars.ADO_SHARE_WITH }}
 
-          npx tfx extension publish --vsix out/*.vsix --no-wait-validation "${auth[@]}"
+  test-dev:
+    needs: [build, publish-dev]
+    runs-on: ubuntu-latest
+    environment: e2e
+    concurrency: e2e # Every run resets the same test repository.
+    env:
+      AZDO_URL: ${{ vars.AZDO_URL }}
+      AZDO_PROJECT: ${{ vars.AZDO_PROJECT }}
+      AZDO_PAT: ${{ secrets.AZDO_PAT }}
+      GRAFANA_URL: http://localhost:3000
+      GRAFANA_USER: admin
+      GRAFANA_PASSWORD: admin
+      GIT_PROXY_URL: http://git-proxy:8080/grafana-git-sync-e2e.git
+      E2E_PIPELINE_TASK: GrafanaGitSyncPreviewDev@${{ needs.build.outputs.major }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tasks/GrafanaGitSyncPreview/package-lock.json
+      - run: npm ci
+      - name: Install the dev extension in the test organization
+        run: node scripts/install-extension.mjs "$(jq -r .publisher vss-extension.json)" "$(jq -r .id vss-extension.json)-dev" "${{ needs.build.outputs.version }}" "$DEV_TASK_ID"
+      - run: npm run e2e:up
+      - run: npm run test:e2e
+      - if: always()
+        run: npm run e2e:down
 
-          # Validation sometimes takes longer than tfx waits, so poll it here.
-          for i in $(seq 1 60); do
-            status=$(npx tfx extension isvalid "${id[@]}" --version "${VERSION#v}" --json "${auth[@]}" | jq -r .status)
-            echo "Validation: $status"
-            case "$status" in
-              success) break ;;
-              pending) sleep 30 ;;
-              *) exit 1 ;;
-            esac
-          done
-          [ "$status" = success ] || { echo "Validation did not finish in 30 minutes"; exit 1; }
-
-          if [ -n "$SHARE_WITH" ]; then npx tfx extension share "${id[@]}" --share-with $SHARE_WITH "${auth[@]}"; fi
-
+  publish:
+    needs: [build, test-dev]
+    runs-on: ubuntu-latest
+    environment: marketplace
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+          path: out
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Promote the tested build to the release extension
+        run: |
+          export MARKETPLACE_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
+          echo "::add-mask::$MARKETPLACE_TOKEN"
+          scripts/publish-marketplace.sh "$(ls out/*.vsix | grep -v -- -dev-)" "${{ needs.build.outputs.version }}" ${{ vars.ADO_SHARE_WITH }}
       - uses: softprops/action-gh-release@v2
         with:
           files: out/*.vsix

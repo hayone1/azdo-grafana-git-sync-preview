@@ -66,19 +66,22 @@ The repository is `hayone1/azdo-grafana-git-sync-preview`. If the owner or name 
 Versions come from the tag. The release workflow writes them into `vss-extension.json`, both `package.json` files and `task.json` before packaging.
 
 ```sh
-git tag v1.0.0
-git push origin v1.0.0
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
-The workflow then:
+Every build is tested as an installed extension before it is released:
 
-1. Runs the tests.
-2. Builds the `.vsix`.
-3. Signs in as the service principal and gets an Entra token for Azure DevOps.
-4. Publishes the `.vsix` to the Marketplace and shares it with `ADO_SHARE_WITH`.
-5. Creates a GitHub release with the `.vsix` attached.
+1. **build**: runs the unit tests and packages two `.vsix` files from one build: the release extension and a private **dev** extension. The dev extension has its own extension id (`grafana-git-sync-preview-dev`), task id and task name (`GrafanaGitSyncPreviewDev`), so both can be installed in the same organization. See [scripts/package.mjs](../scripts/package.mjs).
+2. **publish-dev**: signs in as the service principal and publishes the dev extension, waits for Marketplace validation, and shares it with `ADO_SHARE_WITH`.
+3. **test-dev**: installs that dev version in the test organization, starts the local Grafana stack, and runs the end-to-end test with `E2E_PIPELINE_TASK=GrafanaGitSyncPreviewDev@<major>`. Besides the usual checks, the test makes the `grafana-git-sync-e2e-preview` pipeline a build-validation policy on the test repository, and asserts that the real pipeline run on the pull request succeeds and posts its comment.
+4. **publish**: promotes the same tested build: publishes the release extension, shares it, and creates a GitHub release with both `.vsix` files.
 
-Every release needs a higher version than the last one. Azure Pipelines picks up a new minor or patch automatically for `GrafanaGitSyncPreview@1`. A breaking change needs a new major version, which pipelines must opt in to with `@2`.
+If any step fails, the release extension is not published. Tag a new patch version after fixing; the Marketplace never accepts the same version twice, for either extension.
+
+Every release needs a higher version than the last one. Pipelines reference the task by major version, `GrafanaGitSyncPreview@0` for 0.x, and pick up new minors and patches automatically. A new major version needs pipelines to opt in, for example `@1`.
+
+The pipeline test needs, in the test organization: one Azure Pipelines parallel job (free tier is enough), a PAT in the `e2e` environment with Code, Pull Request Threads, Build, Policy, Extensions and Security scopes, and permission to install extensions.
 
 ## 6. Install in Azure DevOps
 

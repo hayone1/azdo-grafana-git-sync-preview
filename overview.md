@@ -20,7 +20,7 @@ steps:
   - checkout: self
     fetchDepth: 2
 
-  - task: GrafanaGitSyncPreview@1
+  - task: GrafanaGitSyncPreview@0
     inputs:
       grafanaUrl: https://grafana.example.com
       organizations: |

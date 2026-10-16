@@ -14,6 +14,9 @@
 //   GRAFANA_ORG_ID      default 1
 //   GIT_PROXY_URL       the test repository behind git-v2-azuredevops-proxy, as Grafana reaches it
 //   GIT_PROXY_TOKEN     the proxy's token for that repository; empty when the proxy has GIT_PROXY_AUTH=none
+//   E2E_PIPELINE_TASK   optional, e.g. GrafanaGitSyncPreviewDev@0: also run that installed task in a
+//                       real Azure Pipelines build-validation run on the pull request
+//   E2E_PIPELINE_POOL   agent pool for that run (default: the hosted ubuntu-latest image)
 //   E2E_KEEP=1          keep the pull request and the Grafana repository for manual inspection
 //
 // Git Sync speaks Git protocol v2, which Azure Repos rejects (TF401041), so Grafana reads the test
@@ -44,6 +47,8 @@ const withGrafana = Boolean(grafanaUrl && env.GIT_PROXY_URL);
 const runId = Date.now().toString(36);
 const branch = `e2e/run-${runId}`;
 const commentKey = "grafana-dashboard-preview";
+const pipelineTask = env.E2E_PIPELINE_TASK;
+const pipelineCommentKey = "pipeline-preview";
 
 const azdoAuth = "Basic " + Buffer.from(`:${env.AZDO_PAT}`).toString("base64");
 const grafanaAuth = env.GRAFANA_TOKEN
@@ -80,7 +85,7 @@ async function poll(what, fn, timeoutMs = 120_000) {
 // "unable to read bytes as a resource".
 function dashboard(uid, title) {
   const spec = { title, schemaVersion: 39, panels: [{ id: 1, type: "text", title: "e2e", gridPos: { x: 0, y: 0, w: 12, h: 4 }, options: { content: title } }] };
-  return JSON.stringify({ apiVersion: "dashboard.grafana.app/v1beta1", kind: "Dashboard", metadata: { name: uid }, spec }, null, 2) + "\n";
+  return yaml.dump({ apiVersion: "dashboard.grafana.app/v1beta1", kind: "Dashboard", metadata: { name: uid }, spec });
 }
 
 const manifest = (url) => `apiVersion: provisioning.grafana.app/v0alpha1
@@ -102,6 +107,69 @@ spec:
   workflows: []
 `;
 
+// Build validation pipeline that runs the installed task on every pull request into main.
+const pipelineYaml = () => `trigger: none
+pool:
+  ${env.E2E_PIPELINE_POOL ? `name: ${env.E2E_PIPELINE_POOL}` : "vmImage: ubuntu-latest"}
+steps:
+  - checkout: self
+    fetchDepth: 2
+  - task: ${pipelineTask}
+    inputs:
+      grafanaUrl: https://grafana.example.com
+      organizations: main=1
+      repositoriesFile: grafana-repository.yaml
+      commentKey: ${pipelineCommentKey}
+`;
+
+/** Creates or finds the pipeline, lets its build identity comment, and requires it on pull requests. */
+async function ensurePipeline(repo) {
+  const name = `${repoName}-preview`;
+  let def = (await azdo("GET", `build/definitions?name=${encodeURIComponent(name)}`)).value[0];
+  if (!def) {
+    def = await azdo("POST", "build/definitions", {
+      name,
+      type: "build",
+      process: { type: 2, yamlFilename: "azure-pipelines.yml" },
+      repository: { id: repo.id, type: "TfsGit", name: repoName, defaultBranch: "refs/heads/main" },
+      queue: { name: "Azure Pipelines" },
+    });
+  }
+
+  // Grant both build identities; which one a job runs as depends on the job authorization scope setting.
+  const orgName = new URL(org).pathname.split("/").filter(Boolean)[0];
+  const projectId = (await http(azdoAuth, "GET", `${org}_apis/projects/${encodeURIComponent(project)}?api-version=7.1`)).json.id;
+  for (const identity of [`${project} Build Service (${orgName})`, `Project Collection Build Service (${orgName})`]) {
+    const found = (await http(azdoAuth, "GET", `https://vssps.dev.azure.com/${orgName}/_apis/identities?searchFilter=General&filterValue=${encodeURIComponent(identity)}&api-version=7.1`)).json.value[0];
+    if (!found) continue;
+    // Git repositories security namespace; 16384 = Contribute to pull requests.
+    await http(azdoAuth, "POST", `${org}_apis/accesscontrolentries/2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87?api-version=7.1`, {
+      token: `repoV2/${projectId}/${repo.id}`,
+      merge: true,
+      accessControlEntries: [{ descriptor: found.descriptor, allow: 16384, deny: 0 }],
+    });
+  }
+
+  const buildPolicy = "0609b952-1397-4640-95ec-e00a01b2c241";
+  const policies = (await azdo("GET", `policy/configurations?repositoryId=${repo.id}&refName=refs/heads/main&policyType=${buildPolicy}`)).value;
+  if (!policies.some((p) => p.settings?.buildDefinitionId === def.id)) {
+    await azdo("POST", "policy/configurations", {
+      isEnabled: true,
+      isBlocking: false,
+      type: { id: buildPolicy },
+      settings: {
+        buildDefinitionId: def.id,
+        queueOnSourceUpdateOnly: false,
+        manualQueueOnly: false,
+        validDuration: 0,
+        displayName: "Grafana preview",
+        scope: [{ repositoryId: repo.id, refName: "refs/heads/main", matchKind: "exact" }],
+      },
+    });
+  }
+  return def;
+}
+
 function git(cwd, ...args) {
   return execFileSync("git", ["-c", `http.extraHeader=Authorization: ${azdoAuth}`, ...args], { cwd, encoding: "utf8" });
 }
@@ -121,7 +189,7 @@ function runTask(cwd, inputs, variables) {
   return { stdout, result, summary: summary && readFileSync(summary, "utf8") };
 }
 
-test("pull request and branch mode against a real organization", { skip: missing.length ? `set ${missing.join(", ")}` : false, timeout: 600_000 }, async (t) => {
+test("pull request and branch mode against a real organization", { skip: missing.length ? `set ${missing.join(", ")}` : false, timeout: 1_500_000 }, async (t) => {
   // Repository: create once, then reset main to the fixture on every run.
   let repo = (await azdo("GET", `git/repositories/${repoName}`, undefined, { allow: [404] }));
   if (!repo?.id) repo = await azdo("POST", "git/repositories", { name: repoName });
@@ -141,6 +209,7 @@ test("pull request and branch mode against a real organization", { skip: missing
   write(work, "grafana-repository.yaml", manifest(env.GIT_PROXY_URL || cloneUrl));
   write(work, "grafana/existing.yaml", dashboard("e2e-existing", "E2E existing"));
   write(work, "grafana/removed.yaml", dashboard("e2e-removed", "E2E removed"));
+  if (pipelineTask) write(work, "azure-pipelines.yml", pipelineYaml());
   git(work, "add", "-A");
   git(work, "commit", "-qm", "Fixture");
   git(work, "push", "-qf", cloneUrl, "main");
@@ -161,6 +230,8 @@ test("pull request and branch mode against a real organization", { skip: missing
     await grafana("POST", `${provisioning}/repositories/${grafanaRepo}/jobs`, { action: "pull", pull: { incremental: false } }, { allow: [409] });
     await poll("Grafana to sync main", async () => (await grafana("GET", "/api/dashboards/uid/e2e-removed", undefined, { allow: [404] })).status === 200, 300_000);
   }
+
+  const pipeline = pipelineTask ? await ensurePipeline(repo) : undefined;
 
   // Pull request: modify one dashboard, add one, delete one, and touch a non-dashboard file.
   git(work, "checkout", "-qb", branch);
@@ -270,6 +341,22 @@ test("pull request and branch mode against a real organization", { skip: missing
         if (file === "existing.yaml") assert.equal(resource.title ?? resource.spec?.title, `E2E existing ${runId}`);
       }
     }
+  }
+
+  if (pipeline) {
+    // The build-validation policy queues the pipeline for the pull request; wait for its verdict.
+    const build = await poll("the pull request pipeline run", async () => {
+      const runs = (await azdo("GET", `build/builds?definitions=${pipeline.id}&branchName=refs/pull/${pr.pullRequestId}/merge&$top=1`)).value;
+      return runs[0]?.status === "completed" ? runs[0] : undefined;
+    }, 900_000);
+    assert.equal(build.result, "succeeded", `${build._links.web.href} finished ${build.result}`);
+    const threads = (await azdo("GET", threadsPath)).value;
+    const fromPipeline = threads.find((th) => th.comments?.[0]?.content?.includes(`<!-- ${pipelineCommentKey} -->`));
+    assert.ok(fromPipeline, `${pipelineTask} posted no comment on the pull request`);
+    const body = fromPipeline.comments[0].content;
+    assert.match(body, /added\.yaml[^\n]*\| added \|/);
+    assert.match(body, /existing\.yaml[^\n]*\| modified \|/);
+    assert.match(body, /removed\.yaml[^\n]*\| deleted \|/);
   }
 
   // Branch mode on main lists every dashboard and needs no pull request.
