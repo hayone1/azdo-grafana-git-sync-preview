@@ -79,7 +79,7 @@ Every build is tested as an installed extension before it is released:
 
 If any step fails, the release extension is not published.
 
-If a version of an extension fails Marketplace validation, later uploads of that extension can be accepted by `tfx` and then silently dropped, and the workflow fails with "never appeared on the Marketplace". Check the extension on the publisher page. For the dev extension, unpublish it (`npx tfx extension unpublish --publisher hayone1 --extension-id grafana-git-sync-preview-dev`) and rerun the failed jobs. Tag a new patch version after fixing; the Marketplace never accepts the same version twice, for either extension.
+If a version of an extension fails Marketplace validation, later uploads of that extension can be accepted by `tfx` and then silently dropped, and the workflow fails with "never appeared on the Marketplace". Check the extension on the publisher page. For the dev extension, remove it on the publisher page (*... > Remove*), which deletes it; `tfx extension unpublish` only hides it, and the next upload then fails with "The extension already exists". Then rerun the failed jobs. Tag a new patch version after fixing; the Marketplace never accepts the same version twice, for either extension.
 
 Every release needs a higher version than the last one. Pipelines reference the task by major version, `GrafanaGitSyncPreview@0` for 0.x, and pick up new minors and patches automatically. A new major version needs pipelines to opt in, for example `@1`.
 
