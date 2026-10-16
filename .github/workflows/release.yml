@@ -43,13 +43,29 @@ jobs:
       - name: Publish to the Visual Studio Marketplace
         env:
           SHARE_WITH: ${{ vars.ADO_SHARE_WITH }}
+          VERSION: ${{ github.ref_name }}
         run: |
           # 499b84ac-1321-427f-aa17-267ca6975798 is the Azure DevOps resource. tfx sends the Entra token like a PAT.
           token=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
           echo "::add-mask::$token"
-          args=(extension publish --vsix out/*.vsix --auth-type pat --token "$token" --no-prompt)
-          if [ -n "$SHARE_WITH" ]; then args+=(--share-with $SHARE_WITH); fi
-          npx tfx "${args[@]}"
+          auth=(--auth-type pat --token "$token" --no-prompt)
+          id=(--publisher "$(jq -r .publisher vss-extension.json)" --extension-id "$(jq -r .id vss-extension.json)")
+
+          npx tfx extension publish --vsix out/*.vsix --no-wait-validation "${auth[@]}"
+
+          # Validation sometimes takes longer than tfx waits, so poll it here.
+          for i in $(seq 1 60); do
+            status=$(npx tfx extension isvalid "${id[@]}" --version "${VERSION#v}" --json "${auth[@]}" | tr -d '"')
+            echo "Validation: $status"
+            case "$status" in
+              success) break ;;
+              pending) sleep 30 ;;
+              *) exit 1 ;;
+            esac
+          done
+          [ "$status" = success ] || { echo "Validation did not finish in 30 minutes"; exit 1; }
+
+          if [ -n "$SHARE_WITH" ]; then npx tfx extension share "${id[@]}" --share-with $SHARE_WITH "${auth[@]}"; fi
 
       - uses: softprops/action-gh-release@v2
         with:
