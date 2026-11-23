@@ -19,6 +19,9 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Only for vars.MARKETPLACE_PUBLIC, which lives in this environment. Without it the variable reads
+    # as empty and the release extension is packaged private.
+    environment: marketplace
     outputs:
       version: ${{ steps.version.outputs.version }}
       major: ${{ steps.version.outputs.major }}
@@ -129,6 +132,12 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
+      - name: Check the package matches MARKETPLACE_PUBLIC
+        run: |
+          vsix=$(ls out/*.vsix | grep -v -- -canary-)
+          if unzip -p "$vsix" extension.vsixmanifest | grep -q "<GalleryFlags>[^<]*Public"; then packaged=true; else packaged=false; fi
+          echo "MARKETPLACE_PUBLIC=${{ vars.MARKETPLACE_PUBLIC }}, package public=$packaged"
+          [ "$packaged" = "${{ vars.MARKETPLACE_PUBLIC == 'true' }}" ] || { echo "::error::The release package does not match MARKETPLACE_PUBLIC"; exit 1; }
       - name: Promote the tested build to the release extension
         run: |
           export MARKETPLACE_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
