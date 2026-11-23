@@ -207,7 +207,7 @@
       "label": "Synced branch",
       "defaultValue": "",
       "groupName": "advanced",
-      "helpMarkDown": "Branch Grafana syncs, used in branch mode to leave out 'current' links for dashboards that only exist on the built branch. Defaults to the `branch` in each Repository manifest, then `main`."
+      "helpMarkDown": "Branch Grafana syncs, used in branch mode to leave out 'current' links for dashboards that only exist on the built branch. When set, it wins over the `branch` in each Repository manifest. Defaults to that `branch`, then `main`."
     },
     {
       "name": "workingDirectory",
@@ -223,7 +223,7 @@
       "label": "Access token",
       "defaultValue": "$(System.AccessToken)",
       "groupName": "advanced",
-      "helpMarkDown": "Token that can contribute to pull requests. The build service identity needs **Contribute to pull requests** on the repository."
+      "helpMarkDown": "Token that can contribute to pull requests. The build service identity needs **Contribute to pull requests** on the repository. In branch mode on Azure Repos, used only to fetch the synced branch."
     }
   ],
   "outputVariables": [
