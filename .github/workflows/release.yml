@@ -2,7 +2,8 @@ name: Release
 
 # Pushing a version tag builds once, publishes the build as the private dev extension, runs it in a
 # real Azure Pipelines pull request build, and only then promotes the same build to the release
-# extension.
+# extension. The published release extension is then installed and tested the same way before the
+# GitHub release is created.
 
 on:
   push:
@@ -100,6 +101,7 @@ jobs:
             package-lock.json
             tasks/GrafanaGitSyncPreview/package-lock.json
       - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - name: Install the dev extension in the test organization
         run: node scripts/install-extension.mjs "$(jq -r .publisher vss-extension.json)" "$(jq -r .id vss-extension.json)-canary" "${{ needs.build.outputs.version }}" "$DEV_TASK_ID"
       - run: npm run e2e:up
@@ -132,6 +134,50 @@ jobs:
           export MARKETPLACE_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
           echo "::add-mask::$MARKETPLACE_TOKEN"
           scripts/publish-marketplace.sh "$(ls out/*.vsix | grep -v -- -canary-)" "${{ needs.build.outputs.version }}" ${{ vars.ADO_SHARE_WITH }}
+
+  # Installs what the Marketplace now serves as the release extension and runs the same end-to-end
+  # test against it. The GitHub release is created only when this passes, so a missing release
+  # marks a published version that needs a look.
+  verify-release:
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    environment: e2e
+    concurrency: e2e
+    env:
+      AZDO_URL: ${{ vars.AZDO_URL }}
+      AZDO_PROJECT: ${{ vars.AZDO_PROJECT }}
+      AZDO_PAT: ${{ secrets.AZDO_PAT }}
+      GRAFANA_URL: http://localhost:3000
+      GRAFANA_USER: admin
+      GRAFANA_PASSWORD: admin
+      GIT_PROXY_URL: http://git-proxy:8080/grafana-git-sync-e2e.git
+      E2E_PIPELINE_TASK: GrafanaGitSyncPreview@${{ needs.build.outputs.major }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tasks/GrafanaGitSyncPreview/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Install the release extension in the test organization
+        run: node scripts/install-extension.mjs "$(jq -r .publisher vss-extension.json)" "$(jq -r .id vss-extension.json)" "${{ needs.build.outputs.version }}" "$(jq -r .id tasks/GrafanaGitSyncPreview/task.json)"
+      - run: npm run e2e:up
+      - run: npm run test:e2e
+      - if: always()
+        run: npm run e2e:down
+
+  github-release:
+    needs: [verify-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+          path: out
       - uses: softprops/action-gh-release@v2
         with:
           files: out/*.vsix

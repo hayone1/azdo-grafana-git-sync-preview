@@ -54,6 +54,7 @@ jobs:
             package-lock.json
             tasks/GrafanaGitSyncPreview/package-lock.json
       - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - run: npm run e2e:up
       - run: npm run test:e2e
       - if: always()
