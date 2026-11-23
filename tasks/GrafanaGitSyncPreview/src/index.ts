@@ -76,14 +76,25 @@ function scanAll(cwd: string, repos: Repository[], isDashboardFile: (f: string) 
  * dashboard only for files on the branch it syncs, so drop "current" links for the rest.
  */
 function markLive(cwd: string, rows: Row[], repos: Repository[], builtBranch: string) {
-  const fallback = tl.getInput("syncedBranch") || "main";
+  // The input wins over the manifests, so a pipeline can correct a branch they get wrong.
+  const explicit = tl.getInput("syncedBranch");
+  // Only Azure Repos accepts the job token; another provider gets an anonymous fetch.
+  const token = tl.getVariable("Build.Repository.Provider") === "TfsGit"
+    ? tl.getInput("accessToken") || tl.getVariable("System.AccessToken")
+    : undefined;
+  if (token) tl.setSecret(token);
   const refs = new Map<string, string | undefined>();
   for (const r of rows) {
-    const branch = repos.find((repo) => repo.name === r.repository)?.branch || fallback;
+    const branch = explicit || repos.find((repo) => repo.name === r.repository)?.branch || "main";
     if (branch === builtBranch) continue;
     if (!refs.has(branch)) {
-      const ref = remoteBranch(cwd, branch);
-      if (!ref) tl.warning(`Cannot read branch '${branch}', so 'current' links are shown for every dashboard.`);
+      const ref = remoteBranch(cwd, branch, token);
+      if (!ref) {
+        tl.warning(
+          `Cannot read branch '${branch}', so 'current' links are shown for every dashboard. ` +
+            "Check out with fetchDepth: 0, or let the job's access token read the repository.",
+        );
+      }
       refs.set(branch, ref);
     }
     const ref = refs.get(branch);

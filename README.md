@@ -12,7 +12,7 @@ Grafana [Git Sync](https://grafana.com/docs/grafana/latest/observability-as-code
 | `branch` | Every dashboard on the built branch | Build summary, log |
 | `auto` (default) | `pullRequest` for pull request builds, otherwise `branch` | |
 
-Branch mode lets you preview a branch without opening a pull request: push, run the pipeline, and open the **Extensions** tab on the run summary (or the log) for links. It needs no access token and works with any repository provider Azure Pipelines can build, including GitHub.
+Branch mode lets you preview a branch without opening a pull request: push, run the pipeline, and open the **Extensions** tab on the run summary (or the log) for links. It works with any repository provider Azure Pipelines can build, including GitHub. To leave out `current` links for dashboards that only exist on the built branch, the task reads the synced branch. A shallow checkout lacks it, so on Azure Repos the task fetches it with the job token. On other providers, check out with `fetchDepth: 0`.
 
 The build summary is attached with the [`task.uploadsummary`](https://learn.microsoft.com/azure/devops/pipelines/scripts/logging-commands#uploadsummary-add-some-markdown-content-to-the-build-summary) logging command, the Azure DevOps equivalent of a GitHub job summary.
 
@@ -115,7 +115,7 @@ steps:
   - checkout: self
     fetchDepth: 2   # HEAD^1 must exist to diff against the target branch.
 
-  - task: GrafanaGitSyncPreview@0
+  - task: GrafanaGitSyncPreview@1
     inputs:
       grafanaUrl: https://grafana.example.com
       organizations: |
@@ -136,7 +136,7 @@ trigger:
     exclude: [main]
 
 steps:
-  - task: GrafanaGitSyncPreview@0
+  - task: GrafanaGitSyncPreview@1
     inputs:
       grafanaUrl: https://grafana.example.com
       repositoriesFile: grafana/repositories/*.yaml
@@ -149,7 +149,7 @@ Grafana must be able to read the branch through Git Sync for preview links to re
 If your Git Sync repositories are not defined in this repository, map folders inline:
 
 ```yaml
-  - task: GrafanaGitSyncPreview@0
+  - task: GrafanaGitSyncPreview@1
     inputs:
       grafanaUrl: https://grafana.example.com
       repositorySource: inline
@@ -167,7 +167,7 @@ The default `baseRevision` of `HEAD^1` assumes the pipeline checks out the pull 
 ```yaml
   - checkout: self
     fetchDepth: 0
-  - task: GrafanaGitSyncPreview@0
+  - task: GrafanaGitSyncPreview@1
     inputs:
       grafanaUrl: https://grafana.example.com
       repositoriesFile: grafana/repositories/*.yaml
@@ -196,9 +196,9 @@ The default `baseRevision` of `HEAD^1` assumes the pipeline checks out the pull 
 | `failOnParseError` | `true` | Fail the task when a changed dashboard cannot be parsed. When `false`, the task succeeds with issues. |
 | `baseRevision` | `HEAD^1` | Git revision to diff `HEAD` against. Pull request mode only. |
 | `ref` | | Branch or tag to preview. Defaults to the pull request source branch, or the built branch. |
-| `syncedBranch` | | Branch Grafana syncs. In branch mode, dashboards missing from it get no `current` link, since Grafana has no live copy. Defaults to the `branch` in each Repository manifest, then `main`. |
+| `syncedBranch` | | Branch Grafana syncs. In branch mode, dashboards missing from it get no `current` link, since Grafana has no live copy. When set, it wins over the `branch` in each Repository manifest. Defaults to that `branch`, then `main`. |
 | `workingDirectory` | `$(Build.SourcesDirectory)` | Git checkout to inspect. |
-| `accessToken` | `$(System.AccessToken)` | Token used to read and write pull request threads. Not used in branch mode. |
+| `accessToken` | `$(System.AccessToken)` | Token used to read and write pull request threads. In branch mode on Azure Repos, used only to fetch the synced branch. |
 
 ## Output variables
 
@@ -213,12 +213,13 @@ Give the task a `name` to read them in later steps, for example `$(preview.dashb
 
 | Symptom | Cause and fix |
 |---|---|
-| `fatal: bad revision 'HEAD^1'` | Shallow checkout. Set `fetchDepth: 2` or more. |
-| `401` or `403` on `pullRequests/.../threads` | Build service lacks **Contribute to pull requests**, or the job token is scoped too narrowly. Check *Project settings > Settings > Limit job authorization scope*. |
+| `Cannot find base revision 'HEAD^1'` | Shallow checkout. Set `fetchDepth: 2` or more. |
+| `Azure DevOps did not accept the access token`, or `403` on `pullRequests/.../threads` | Build service lacks **Contribute to pull requests**, or the job token is scoped too narrowly. Check *Project settings > Settings > Limit job authorization scope*. |
 | Task is skipped | `mode` is `pullRequest` but the build is not for a pull request. Use `auto` or run it from a build validation policy. |
 | No pull request comment, warning in log | The repository is not Azure Repos. Links are still in the log and build summary. |
 | Preview link shows an error | Grafana cannot read the source branch yet. The proxy and Git Sync can each lag a push by up to a minute. Wait and reload. |
 | Preview shows `unable to read bytes as a resource` | The file is classic dashboard JSON. Grafana 13 Git Sync needs a dashboard resource, as in the example above. |
+| Preview shows `path contains invalid characters` | Git Sync rejects file paths with characters outside ASCII letters, digits and a few symbols, such as accented letters. Rename the file. Titles may use any characters. |
 | No rows for a changed file | The file is outside every Git Sync folder, has another extension, or is not a dashboard. |
 
 ## Contributing

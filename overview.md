@@ -20,7 +20,7 @@ steps:
   - checkout: self
     fetchDepth: 2
 
-  - task: GrafanaGitSyncPreview@0
+  - task: GrafanaGitSyncPreview@1
     inputs:
       grafanaUrl: https://grafana.example.com
       organizations: |
@@ -30,5 +30,7 @@ steps:
 ```
 
 Grant the project build service **Contribute to pull requests** on the repository.
+
+Grafana Git Sync cannot read Azure Repos directly, because Azure Repos does not speak Git protocol v2. The README shows how to connect them through [git-v2-azuredevops-proxy](https://github.com/Dominik-esb/git-v2-azuredevops-proxy).
 
 Full input reference, examples and troubleshooting: [README on GitHub](https://github.com/hayone1/azdo-grafana-git-sync-preview#readme).

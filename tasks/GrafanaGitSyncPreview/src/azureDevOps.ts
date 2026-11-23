@@ -17,11 +17,21 @@ async function call(ctx: PullRequestContext, method: string, url: string, body?:
       "Content-Type": "application/json",
     },
     body: body === undefined ? undefined : JSON.stringify(body),
+    // Azure DevOps answers a token it does not accept with a redirect or an HTML sign-in page.
+    redirect: "manual",
   });
-  if (!resp.ok) {
-    throw new Error(`${method} ${url} failed: ${resp.status} ${resp.statusText} ${await resp.text()}`);
+  const text = await resp.text();
+  const isJson = (resp.headers.get("content-type") ?? "").includes("json");
+  if (resp.status === 401 || resp.status === 203 || (resp.status >= 300 && resp.status < 400) || (resp.ok && !isJson)) {
+    throw new Error(
+      `${method} ${url} failed: ${resp.status}. Azure DevOps did not accept the access token. ` +
+        "Check that it is valid and that the build service has Contribute to pull requests on the repository.",
+    );
   }
-  return resp.json();
+  if (!resp.ok) {
+    throw new Error(`${method} ${url} failed: ${resp.status} ${resp.statusText} ${text.slice(0, 1000)}`);
+  }
+  return text ? JSON.parse(text) : undefined;
 }
 
 function threadsUrl(ctx: PullRequestContext): string {
