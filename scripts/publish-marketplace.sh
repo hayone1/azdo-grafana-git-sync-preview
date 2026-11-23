@@ -34,4 +34,9 @@ for _ in $(seq 1 60); do
 done
 [ "$status" = success ] || { echo "Validation did not finish in 30 minutes"; exit 1; }
 
-if [ $# -gt 0 ]; then npx tfx extension share "${id[@]}" --share-with "$@" "${auth[@]}"; fi
+# A public extension is visible to every organization, and the Marketplace refuses to share one.
+if grep -q "<GalleryFlags>[^<]*Public" <<<"$manifest"; then
+  echo "$extension is public; not sharing."
+elif [ $# -gt 0 ]; then
+  npx tfx extension share "${id[@]}" --share-with "$@" "${auth[@]}"
+fi

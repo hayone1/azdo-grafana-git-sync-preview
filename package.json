@@ -14,6 +14,7 @@
     "e2e:down": "node --env-file-if-exists=.env e2e/stack.mjs down"
   },
   "devDependencies": {
+    "playwright": "^1.65.1",
     "tfx-cli": "^0.21.0"
   }
 }
