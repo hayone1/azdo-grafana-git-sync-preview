@@ -1,20 +1,20 @@
 # Grafana Git Sync PR Preview
 
-Grafana [Git Sync](https://grafana.com/docs/grafana/latest/observability-as-code/provision-resources/intro-git-sync/) comments preview links on GitHub pull requests. Azure Repos has no native integration, so reviewers there see raw dashboard JSON or YAML with no way to look at the result.
+Grafana [Git Sync](https://grafana.com/docs/grafana/latest/observability-as-code/provision-resources/intro-git-sync/) keeps Grafana dashboards as files in a Git repository. On GitHub pull requests, Git Sync adds a comment with preview links. Azure Repos has no Git Sync integration. Thus, reviewers on Azure Repos see only raw dashboard JSON or YAML, and cannot see the dashboard.
 
-This task closes that gap. On every pull request build it posts one comment that lists each changed dashboard with:
+This task adds the missing comment. In each pull request build, the task adds one comment. The comment lists each changed dashboard with two links:
 
-- **current**: the live dashboard in Grafana,
-- **preview**: Git Sync's render of the file on the source branch. Nothing is saved to Grafana.
+- The **current** link opens the live dashboard in Grafana.
+- The **preview** link opens the Git Sync preview of the file on the source branch. Grafana does not save the preview.
 
-The comment is updated in place on every push, so the pull request never collects duplicates. Dashboards that fail to parse are listed too, and fail the build by default.
+Each new push updates the same comment. Thus, the pull request has only one comment from the task. The comment also lists dashboards that the task cannot read. By default, these dashboards make the build fail.
 
-Outside pull requests, **branch mode** lists every dashboard on the built branch in the run's build summary and log, so you can preview a branch without opening a pull request.
+Outside pull requests, the task uses **branch mode**. Branch mode lists all dashboards on the built branch in the build summary and the log. Use branch mode to preview a branch without a pull request.
 
 ## Quick start
 
 ```yaml
-trigger: none   # Run from a branch policy build validation on your target branch.
+trigger: none   # Run the pipeline from a build validation policy on the target branch.
 
 steps:
   - checkout: self
@@ -26,11 +26,12 @@ steps:
       organizations: |
         test=1
         production=3
-      repositoriesFile: grafana/repositories/*.yaml
+      repositorySource: inline
+      repositories: grafana=dashboards   # folder in this repository=Git Sync repository name in Grafana
 ```
 
-Grant the project build service **Contribute to pull requests** on the repository.
+Give the project build service the **Contribute to pull requests** permission on the repository. Without this permission, the task cannot add the comment.
 
-Grafana Git Sync cannot read Azure Repos directly, because Azure Repos does not speak Git protocol v2. The README shows how to connect them through [git-v2-azuredevops-proxy](https://github.com/Dominik-esb/git-v2-azuredevops-proxy).
+Grafana Git Sync cannot read Azure Repos without help, because Azure Repos does not support Git protocol v2. The README shows how to connect Grafana to Azure Repos through [git-v2-azuredevops-proxy](https://github.com/Dominik-esb/git-v2-azuredevops-proxy).
 
-Full input reference, examples and troubleshooting: [README on GitHub](https://github.com/hayone1/azdo-grafana-git-sync-preview#readme).
+The [README on GitHub](https://github.com/hayone1/azdo-grafana-git-sync-preview#readme) has all inputs, more examples and troubleshooting.
